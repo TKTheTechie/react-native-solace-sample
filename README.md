@@ -1,81 +1,169 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# React Native Solace Sample
 
-# Getting Started
+This is a React Native project demonstrating how to integrate and use the Solace PubSub+ messaging platform.
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+## Prerequisites
 
-## Step 1: Start the Metro Server
+Before you begin, ensure you have the following installed:
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+* **Node.js and npm/Yarn:** Required for managing JavaScript dependencies.
+* **React Native CLI:** Installed globally (`npm install -g react-native-cli`).
+* **Android Studio or Xcode:** Depending on whether you're targeting Android or iOS.
+* **React Native Development Environment:** Properly set up as described in the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) documentation.
+* **Solace PubSub+ Broker:** Accessible from your development environment. Replace the placeholder url and vpn with your values.
+* **solclient-debug.js:** The Solace JavaScript API library. Place this file in your project's root directory or a suitable location. In this example it is in the root directory.
 
-To start Metro, run the following command from the _root_ of your React Native project:
+## Getting Started
 
-```bash
-# using npm
-npm start
+1.  **Clone the Repository (if applicable):** If you have a repository, clone it to your local machine.
 
-# OR using Yarn
-yarn start
-```
+2.  **Navigate to the Project Directory:**
 
-## Step 2: Start your Application
+    ```bash
+    cd your-project-directory
+    ```
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
+3.  **Install Dependencies:**
 
-### For Android
+    ```bash
+    # using npm
+    npm install
 
-```bash
-# using npm
-npm run android
+    # OR using Yarn
+    yarn install
+    ```
 
-# OR using Yarn
-yarn android
-```
+4.  **Start the Metro Server:**
 
-### For iOS
+    ```bash
+    # using npm
+    npm start
 
-```bash
-# using npm
-npm run ios
+    # OR using Yarn
+    yarn start
+    ```
 
-# OR using Yarn
-yarn ios
-```
+5.  **Run the Application:**
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
+    **For Android:**
 
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
+    ```bash
+    # using npm
+    npm run android
 
-## Step 3: Modifying your App
+    # OR using Yarn
+    yarn android
+    ```
 
-Now that you have successfully run the app, let's modify it.
+    **For iOS:**
 
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
+    ```bash
+    # using npm
+    npm run ios
 
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+    # OR using Yarn
+    yarn ios
+    ```
 
-## Congratulations! :tada:
+## App.tsx Code Explanation
 
-You've successfully run and modified your React Native App. :partying_face:
+The `App.tsx` file contains the core logic for connecting to the Solace PubSub+ broker and handling messages.
 
-### Now what?
+```typescript
+import React, {useState} from 'react';
+import {View, Text, Button, StyleSheet} from 'react-native';
+import solace from './solclient-debug';
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
+const App = () => {
+  const [count, setCount] = useState(0);
 
-# Troubleshooting
+  return (
+    <View style={styles.container}>
+      <Text style={styles.text}>Count: {count}</Text>
+      <Button
+        title="Connect"
+        onPress={() => {
+          setCount(count + 1);
 
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+          let factoryProps = new solace.SolclientFactoryProperties();
+          factoryProps.profile = solace.SolclientFactoryProfiles.version10;
+          solace.SolclientFactory.init(factoryProps);
+          solace.SolclientFactory.setLogLevel(solace.LogLevel.DEBUG);
 
-# Learn More
+          if (!solace) {
+            return;
+          }
 
-To learn more about React Native, take a look at the following resources:
+          const session = solace.SolclientFactory.createSession({
+            url: ['ws://10.103.233.119:8008'], // Replace with your Solace broker URL
+            vpnName: 'default', // Replace with your VPN name
+            userName: 'default', // Replace with your username
+            password: '', // Replace with your password
+            clientName: 'MN3735183VDNAHLB',
+            reapplySubscriptions: true,
+            includeSenderId: true,
+          });
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
-# SolaceSample
-# react-native-solace-sample
+          // Register lifecycle event handlers
+          session.on(solace.SessionEventCode.UP_NOTICE, () => {
+            console.log(
+              '!*> Successfully connected and ready to publish messages. ===',
+            );
+          });
+
+          session.on(
+            solace.SessionEventCode.CONNECT_FAILED_ERROR,
+            sessionEvent => {
+              console.warn(
+                `!*> Connection failed to the message router: ${sessionEvent.infoStr} - check parameter values and connectivity!`,
+              );
+            },
+          );
+
+          session.on(solace.SessionEventCode.DISCONNECTED, () => {
+            console.log('!*> Disconnected.');
+          });
+
+          // Log a message when topic subscription is successful.
+          session.on(solace.SessionEventCode.SUBSCRIPTION_OK, sessionEvent => {
+            console.log(
+              `!*> Successfully subscribed/unsubscribed from topic: ${sessionEvent.correlationKey}`,
+              sessionEvent,
+            );
+          });
+
+          // Handle message
+          session.on(solace.SessionEventCode.MESSAGE, message => {
+            console.log(
+              '!*> Received message:',
+              message.getBinaryAttachment(),
+              ', details:\n',
+              message.dump(),
+            );
+            console.log('Message is', message);
+          });
+
+          try {
+            session.connect();
+          } catch (error) {
+            console.log(error.toString());
+          }
+        }}
+      />
+    </View>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  text: {
+    fontSize: 24,
+    marginBottom: 20,
+  },
+});
+
+export default App;
